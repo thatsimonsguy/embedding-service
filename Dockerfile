@@ -15,14 +15,14 @@ COPY . .
 RUN go build -o embedding-service ./main.go
 
 
-########## Stage 2: llama.cpp builder ##########
+########## Stage 2: llama.cpp builder (static) ##########
 FROM alpine:latest AS llama-builder
 
 WORKDIR /llama.cpp
 RUN apk add --no-cache build-base git cmake curl-dev linux-headers
 
 RUN git clone https://github.com/ggerganov/llama.cpp . \
-    && cmake -S . -B build \
+    && cmake -S . -B build -DBUILD_SHARED_LIBS=OFF \
     && cmake --build build --target llama-embedding -j$(nproc)
 
 RUN cp ./build/bin/llama-embedding /llama-embedding
@@ -32,7 +32,14 @@ RUN cp ./build/bin/llama-embedding /llama-embedding
 FROM alpine:latest
 
 WORKDIR /app
-RUN apk add --no-cache bash
+
+# Add runtime dependencies
+RUN apk add --no-cache \
+    bash \
+    libstdc++ \
+    libgcc \
+    libcurl \
+    libgomp
 
 # Copy Go binary
 COPY --from=go-builder /app/embedding-service .
@@ -40,10 +47,10 @@ COPY --from=go-builder /app/embedding-service .
 # Copy llama embedding binary
 COPY --from=llama-builder /llama-embedding ./llama-embedding
 
-# Optionally copy .env if you're relying on it for config
-COPY .env .
+# Copy model + optional hash check
+COPY models/nomic-embed-text-v1.5.Q4_K_M.gguf /models/nomic-embed-text-v1.5.Q4_K_M.gguf
 
-# ENV vars are optional — can also be passed at runtime
+# ENV config
 ENV MODEL_PATH=/models/nomic-embed-text-v1.5.Q4_K_M.gguf \
     EMBEDDING_BINARY=/app/llama-embedding \
     BATCH_SIZE=4096
