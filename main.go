@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"strconv"
 
 	"go.uber.org/zap"
 	"matthewpsimons.com/embedding-service/handlers"
@@ -11,27 +12,26 @@ import (
 
 func main() {
 	config.Load()
-	logging.Init()
-	defer logging.Logger.Sync()
+	logger := logging.Init()
+	defer logger.Sync()
 
-	log := logging.Logger
+	batchSize := config.AppConfig.BatchSize
+	logger.Info("Parsed config",
+		zap.String("model_path", config.AppConfig.ModelPath),
+		zap.String("embedding_binary", config.AppConfig.EmbeddingBinary),
+		zap.Int("batch_size", batchSize),
+	)
 
 	cfg := config.Config{
 		ModelPath:       config.AppConfig.ModelPath,
 		EmbeddingBinary: config.AppConfig.EmbeddingBinary,
-		BatchSize:       config.AppConfig.BatchSize,
+		BatchSize:       strconv.Itoa(batchSize),
 	}
 
-	log.Info("Loaded config",
-		zap.String("model_path", cfg.ModelPath),
-		zap.String("embedding_binary", cfg.EmbeddingBinary),
-		zap.String("batch size", cfg.BatchSize),
-	)
+	http.HandleFunc("/api/v1/embed", handlers.HandleEmbed(logger, cfg))
 
-	http.HandleFunc("/api/v1/embed", handlers.HandleEmbed(log, cfg))
-
-	log.Info("Server starting", zap.String("addr", ":8080"))
+	logger.Info("Server starting", zap.String("addr", ":8080"))
 	if err := http.ListenAndServe(":8080", nil); err != nil {
-		log.Fatal("Server failed", zap.Error(err))
+		logger.Fatal("Server failed", zap.Error(err))
 	}
 }

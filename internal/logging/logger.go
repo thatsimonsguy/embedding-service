@@ -9,7 +9,7 @@ import (
 
 var Logger *zap.Logger
 
-func Init() {
+func Init() *zap.Logger {
 	config := zap.NewProductionConfig()
 
 	config.EncoderConfig.TimeKey = "timestamp"
@@ -19,7 +19,6 @@ func Init() {
 	config.EncoderConfig.CallerKey = "caller"
 	config.EncoderConfig.EncodeCaller = zapcore.ShortCallerEncoder
 
-	// Optional: Log level from env
 	logLevel := os.Getenv("LOG_LEVEL")
 	if logLevel == "debug" {
 		config.Level.SetLevel(zap.DebugLevel)
@@ -31,4 +30,5 @@ func Init() {
 	}
 
 	Logger = l
+	return Logger
 }
