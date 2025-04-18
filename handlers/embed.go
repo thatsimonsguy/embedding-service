@@ -4,11 +4,11 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"matthewpsimons.com/embedding-service/internal/config"
 	"net/http"
+	"os"
 	"os/exec"
 	"strings"
-
-	"matthewpsimons.com/embedding-service/internal/config"
 
 	"go.uber.org/zap"
 )
@@ -35,7 +35,22 @@ func HandleEmbed(logger *zap.Logger, cfg config.Config) http.HandlerFunc {
 			return
 		}
 
-		args := []string{"-m", cfg.ModelPath, "--batch-size", cfg.BatchSize, "-p", req.Text}
+		tmpfile, err := os.CreateTemp("", "prompt-*.txt")
+		if err != nil {
+			logger.Error("Failed to create temp file", zap.Error(err))
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		defer os.Remove(tmpfile.Name())
+
+		if _, err := tmpfile.WriteString(req.Text); err != nil {
+			logger.Error("Failed to write prompt to temp file", zap.Error(err))
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		tmpfile.Close()
+
+		args := []string{"-m", cfg.ModelPath, "--batch-size", cfg.BatchSize, "--file", tmpfile.Name()}
 		logger.Info("Running embedding command", zap.String("binary", cfg.EmbeddingBinary), zap.Strings("args", args))
 
 		cmd := exec.Command(cfg.EmbeddingBinary, args...)
@@ -55,6 +70,8 @@ func HandleEmbed(logger *zap.Logger, cfg config.Config) http.HandlerFunc {
 			logger.Error("failed to parse embedding", zap.Error(err), zap.String("raw_output", truncate(output, 1000)))
 			return
 		}
+
+		logger.Info("Parsed embedding", zap.Int("dimensions", len(embedding)))
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(EmbedResponse{Embedding: embedding})
