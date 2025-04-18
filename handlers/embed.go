@@ -80,7 +80,12 @@ func HandleEmbed(logger *zap.Logger, cfg config.Config) http.HandlerFunc {
 
 func extractEmbedding(output string) ([]float32, error) {
 	var result []float32
+
 	scanner := bufio.NewScanner(strings.NewReader(output))
+	const maxCapacity = 1024 * 1024 // 1MB for long embedding output lines
+	buf := make([]byte, maxCapacity)
+	scanner.Buffer(buf, maxCapacity)
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "embedding 0:") {
